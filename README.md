@@ -1,10 +1,6 @@
 # think.hdf5
 
-A Clojure library designed to ... well, that part is up to you.
-
-## Usage
-
-FIXME
+A clojure library with a native dependency designed to make reading hdf5 files easy.
 
 ## License
 
