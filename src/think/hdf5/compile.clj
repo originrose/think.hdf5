@@ -14,6 +14,11 @@
                                     (str (System/getProperty "user.dir")
                                          "/java/native/linux/x86_64")
                                     "-nodelete" ;;When shit doesn't work this is very helpful
+                                    "-Xcompiler"
+                                    (str "-I" (System/getProperty "user.dir")
+                                         "/hdf5pp/src")
+                                    "-Xcompiler"
+                                    "-std=c++11"
                                     ])))
 
 (defn -main
