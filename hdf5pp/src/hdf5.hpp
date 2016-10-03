@@ -94,7 +94,18 @@ namespace think { namespace hdf5 {
   class dataset : public object, public abstract_ds
   {
   public:
+    enum EEnum {
+      ds_no_class = -1,
+      ds_scalar = 0,
+      ds_simple = 1,
+      ds_null = 2,
+    };
     virtual ~dataset(){}
+    virtual bool is_simple() const = 0;
+    virtual size_t ndims() const = 0;
+    //dims are hsize_t so use the library function call to find the sizeof_hsize_t
+    //dims are ndims * sizeof(hsize_t)
+    virtual void get_dims( void* dims ) const = 0;
     virtual void read( void* buf, size_t buf_size) const = 0;
   };
 

@@ -133,6 +133,12 @@ namespace think { namespace hdf5 {
     EDType get_type_class() const {
       return static_cast<abstract_ds::EDType>( m_dataset.getTypeClass() ); }
     size_t get_in_mem_data_size() const { return m_dataset.getInMemDataSize(); }
+    bool is_simple() const { return m_dataset.getSpace().isSimple(); }
+    size_t ndims() const { return m_dataset.getSpace().getSimpleExtentNdims(); }
+    void get_dims(void* buf) const
+    {
+      m_dataset.getSpace().getSimpleExtentDims( reinterpret_cast<hsize_t*>( buf ) );
+    }
     void read( void* buf, size_t buf_size ) const
     {
       if ( buf_size >= get_in_mem_data_size() )

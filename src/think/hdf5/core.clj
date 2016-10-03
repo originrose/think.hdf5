@@ -2,7 +2,8 @@
   (:require [resource.core :as resource])
   (:import [think.hdf5 hdf5$library hdf5$Access hdf5$object hdf5$EObjType
             hdf5$dataset hdf5$attribute hdf5$abstract_ds]
-           [org.bytedeco.javacpp BytePointer FloatPointer ShortPointer]))
+           [org.bytedeco.javacpp BytePointer FloatPointer ShortPointer
+            LongPointer IntPointer DoublePointer]))
 
 
 (defn byte-ptr->string
@@ -99,9 +100,16 @@
 
 (defn attr->clj
   [^hdf5$attribute attr]
-  {:name (byte-ptr->string (.name attr))
-   :data-type (int->data-type (.get_type_class attr))
-   :mem-size (.get_in_mem_data_size attr)})
+  (let [data-type (int->data-type (.get_type_class attr))
+        mem-size (.get_in_mem_data_size attr)
+        data-buffer (when (= data-type :dt_string)
+                      (let [byte-ary (BytePointer. mem-size)]
+                        (.read attr byte-ary mem-size)
+                        (byte-ptr->string byte-ary)))]
+   {:name (byte-ptr->string (.name attr))
+    :data-type data-type
+    :mem-size mem-size
+    :data data-buffer}))
 
 (defmulti ->clj (fn [item] (get-type item)))
 
@@ -112,31 +120,77 @@
    :attributes (mapv attr->clj (get-attributes grp))
    :children (mapv ->clj (get-children grp))})
 
+(defprotocol PPtrToArray
+  (->array [ptr]))
+
+(extend-protocol PPtrToArray
+  DoublePointer
+  (->array [^DoublePointer ptr]
+    (let [retval (double-array (.capacity ptr))]
+      (.get ptr retval)
+      retval))
+  FloatPointer
+  (->array [^FloatPointer ptr]
+    (let [retval (float-array (.capacity ptr))]
+      (.get ptr retval)
+      retval))
+  LongPointer
+  (->array [^LongPointer ptr]
+    (let [retval (long-array (.capacity ptr))]
+      (.get ptr retval)
+      retval))
+  IntPointer
+  (->array [^IntPointer ptr]
+    (let [retval (int-array (.capacity ptr))]
+      (.get ptr retval)
+      retval))
+  ShortPointer
+  (->array [^ShortPointer ptr]
+    (let [retval (short-array (.capacity ptr))]
+      (.get ptr retval)
+      retval))
+  BytePointer
+  (->array [^BytePointer ptr]
+    (let [retval (byte-array (.capacity ptr))]
+      (.get ptr retval)
+      retval)))
+
 (defmethod ->clj :dataset
   [^hdf5$object obj]
   (let [ds (.to_dataset obj)
         abs-ds (.asabstract_ds (.to_dataset obj))
         mem-size (.get_in_mem_data_size abs-ds)
         data-type (int->data-type (.get_type_class abs-ds))
-        ret-data (cond
-                   (= data-type :dt_float)
-                   (let [num-floats (quot mem-size Float/BYTES)
-                         storage (FloatPointer. num-floats)
-                         float-ary (float-array num-floats)]
-                     (.read ds storage (* num-floats Float/BYTES))
-                     (.get storage float-ary)
-                     float-ary)
-                   (= data-type :dt_integer)
-                   (let [num-shorts (quot mem-size Short/BYTES)
-                         storage (ShortPointer. num-shorts)
-                         short-ary (short-array num-shorts)]
-                     (.read ds storage (* num-shorts Short/BYTES))
-                     (.get storage short-ary)
-                     short-ary))]
-
+        n-dims (.ndims ds)
+        dim-buffer (vec (->array
+                         (if (= 8 (hdf5$library/sizeof_hsize_t))
+                           (let [dim-ptr (LongPointer. n-dims)]
+                             (.get_dims ds dim-ptr)
+                             dim-ptr)
+                           (let [dim-ptr (IntPointer. n-dims)]
+                             (.get_dims ds dim-ptr)
+                             dim-ptr))))
+        n-elems (reduce * dim-buffer)
+        ^Pointer storage (cond
+                           (= data-type :dt_float)
+                           (let [dtype-size (quot mem-size n-elems)]
+                             (if (= dtype-size 8)
+                               (DoublePointer. n-elems)
+                               (FloatPointer. n-elems)))
+                           (= data-type :dt_integer)
+                           (let [dtype-size (quot mem-size n-elems)]
+                             (condp = dtype-size
+                               8 (LongPointer. n-elems)
+                               4 (IntPointer. n-elems)
+                               2 (ShortPointer. n-elems)
+                               1 (BytePointer. n-elems))))
+        _ (.read ds storage mem-size)
+        ret-data (->array storage)]
     {:type :dataset
      :name (byte-ptr->string (.name obj))
      :attributes (mapv attr->clj (get-attributes obj))
      :data-type data-type
      :mem-size mem-size
+     :n-dims n-dims
+     :dimensions (vec dim-buffer)
      :data ret-data}))

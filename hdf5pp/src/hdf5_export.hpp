@@ -14,6 +14,8 @@ namespace think { namespace hdf5 {
       H5Library::getLibVersion( majnum, minnum, relnum );
     }
 
+    static int sizeof_hsize_t() { return static_cast<int>( sizeof( hsize_t ) ); }
+
     static const object* open_file( const char* name, int access )
     {
       return new file( name, access );
