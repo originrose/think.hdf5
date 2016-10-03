@@ -18,8 +18,12 @@ namespace think { namespace hdf5 {
     {
       return new file( name, access );
     }
-  };
 
+    static void close_file( object* file )
+    {
+      delete file;
+    }
+  };
 
 }}
 #endif
