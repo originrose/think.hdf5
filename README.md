@@ -1,4 +1,4 @@
-# think.hdf5
+# think.hdf5 ![TravisCI](https://travis-ci.com/thinktopic/think.hdf5.svg?token=pNFS4aJt3yqGNNwZvG5z&branch=master)
 
 A clojure library with a native dependency designed to make reading hdf5 files easy.
 
