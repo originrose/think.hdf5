@@ -1,5 +1,6 @@
 (ns think.hdf5.core
-  (:require [resource.core :as resource])
+  (:require [resource.core :as resource]
+            [clojure.set :as set])
   (:import [think.hdf5 hdf5$library hdf5$Access hdf5$object hdf5$EObjType
             hdf5$dataset hdf5$attribute hdf5$abstract_ds]
            [org.bytedeco.javacpp BytePointer FloatPointer ShortPointer
@@ -45,7 +46,7 @@
   [lookup-table-pairs]
   (let [forward-map (into {} lookup-table-pairs)]
    {:forward forward-map
-    :backward (clojure.set/map-invert forward-map)}))
+    :backward (set/map-invert forward-map)}))
 
 (def object-types
   (build-lookup [
