@@ -12,6 +12,7 @@ before_install:
 - export PATH=$PATH:$PWD
 - ". scripts/s3-deploy-access"
 - sudo apt-get install libhdf5-dev
+- sudo apt-get install libhdf5-serial-dev
 - "./build-jni.sh"
 after_success:
 - lein deploy
