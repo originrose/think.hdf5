@@ -4,6 +4,7 @@
 #include <H5Cpp.h>
 #include <string>
 #include <vector>
+#include <map>
 #include <memory>
 
 
@@ -31,12 +32,6 @@ namespace think { namespace hdf5 {
       file,
     };
   };
-
-  class object;
-  typedef vector<object*> obj_ptr_list;
-  typedef shared_ptr<object> shared_obj_ptr;
-  typedef vector<shared_obj_ptr> shared_obj_ptr_list;
-
 
   class abstract_ds
   {
@@ -79,6 +74,18 @@ namespace think { namespace hdf5 {
     virtual attribute* get_attribute(size_t idx) { return NULL; }
   };
   class dataset;
+  class object_registry;
+  class object;
+  typedef vector<object*> obj_ptr_list;
+  typedef shared_ptr<object> shared_obj_ptr;
+  typedef vector<shared_obj_ptr> shared_obj_ptr_list;
+
+  class object_registry
+  {
+  public:
+    virtual ~object_registry(){}
+    virtual object* dereference( int obj_id, long file_offset ) = 0;
+  };
 
   class object : public location
   {
@@ -89,6 +96,8 @@ namespace think { namespace hdf5 {
     virtual size_t child_count() const { return 0; }
     virtual object* get_child( size_t idx ) { return NULL; }
     virtual dataset* to_dataset() { return NULL; }
+    virtual object_registry& registry() = 0;
+    virtual int obj_id () = 0;
   };
 
   class dataset : public object, public abstract_ds

@@ -8,18 +8,22 @@ namespace think { namespace hdf5 {
 
   class rand_obj : public object
   {
+    object_registry& m_registry;
     string m_name;
     shared_obj_ptr_list m_children;
     EObjType::EEnum m_type;
 
   public:
-    rand_obj( string& name, EObjType::EEnum type )
-      : m_name (name )
+    rand_obj( object_registry& reg, string& name, EObjType::EEnum type )
+      : m_registry( reg )
+      , m_name (name )
       , m_type( type )
     {
     }
     virtual EObjType::EEnum type() const { return m_type; }
     virtual string name() const { return m_name; }
+    virtual object_registry& registry() { return m_registry; }
+    int obj_id () { return 0; }
   };
 
   class attribute_impl : public attribute
@@ -65,14 +69,17 @@ namespace think { namespace hdf5 {
 
   class common_fg : public common_loc
   {
+    object_registry& m_registry;
     CommonFG& m_file_or_group;
     EObjType::EEnum m_type;
     mutable shared_obj_ptr_list m_children;
     string m_name;
   public:
-    common_fg( CommonFG& file_or_group, H5Location& location,
+    common_fg( object_registry& registry,
+	       CommonFG& file_or_group, H5Location& location,
 	       EObjType::EEnum type, const string& name)
       : common_loc( location )
+      , m_registry( registry )
       , m_file_or_group( file_or_group )
       , m_type( type )
       , m_name( name )
@@ -82,6 +89,7 @@ namespace think { namespace hdf5 {
     string name() const { return m_name; }
     size_t child_count() const { return ensure_children().size(); }
     object* get_child( size_t idx ) { return ensure_children().at(idx).get(); }
+    object_registry& registry() { return m_registry; }
   protected:
     shared_obj_ptr create_child( size_t idx ) const;
     virtual shared_obj_ptr_list& ensure_children() const
@@ -101,33 +109,39 @@ namespace think { namespace hdf5 {
     Group m_group;
     common_fg m_common_fg;
   public:
-    group( const Group& group, const string& name )
+    group( object_registry& reg, const Group& group, const string& name )
       : m_group( group )
-      , m_common_fg( m_group, m_group, EObjType::group, name )
+      , m_common_fg( reg, m_group, m_group, EObjType::group, name )
     {
     }
     string name() const { return m_common_fg.name(); }
     EObjType::EEnum type() const { return EObjType::group; }
+    int obj_id () { return m_group.getId(); }
     size_t child_count() const { return m_common_fg.child_count(); }
     object* get_child( size_t idx ) { return m_common_fg.get_child( idx ); }
     size_t get_attribute_count() const { return m_common_fg.get_attribute_count(); }
     attribute* get_attribute( size_t idx ) { return m_common_fg.get_attribute (idx ); }
+    object_registry& registry() { return m_common_fg.registry(); }
   };
 
   class dataset_impl : public dataset
   {
+    object_registry& m_registry;
     DataSet m_dataset;
     common_loc m_location;
     string m_name;
   public:
-    dataset_impl(const DataSet& inDataset, const string& inName)
-      : m_dataset( inDataset )
+    dataset_impl(object_registry& reg, const DataSet& inDataset, const string& inName)
+      : m_registry( reg )
+      , m_dataset( inDataset )
       , m_location( m_dataset )
       , m_name( inName )
     {
     }
     string name() const { return m_name; }
     EObjType::EEnum type() const { return EObjType::dataset; }
+    object_registry& registry() { return m_registry; }
+    int obj_id () { return m_dataset.getId(); }
     size_t get_attribute_count() const { return m_location.get_attribute_count(); }
     attribute* get_attribute( size_t idx ) { return m_location.get_attribute(idx); }
     EDType get_type_class() const {
@@ -153,19 +167,22 @@ namespace think { namespace hdf5 {
     int child_type = m_file_or_group.childObjType( idx );
     shared_obj_ptr new_obj;
     if ( child_type == H5O_TYPE_GROUP )
-      new_obj = shared_obj_ptr( new group( m_file_or_group.openGroup( child_name ),
+      new_obj = shared_obj_ptr( new group( m_registry,
+					   m_file_or_group.openGroup( child_name ),
 					   child_name ) );
     else if ( child_type == H5O_TYPE_DATASET )
-      new_obj = shared_obj_ptr( new dataset_impl( m_file_or_group.openDataSet( child_name ),
+      new_obj = shared_obj_ptr( new dataset_impl( m_registry,
+						  m_file_or_group.openDataSet( child_name ),
 						  child_name ) );
     else
-      new_obj = shared_obj_ptr ( new rand_obj( child_name,
+      new_obj = shared_obj_ptr ( new rand_obj( m_registry,
+					       child_name,
 					       static_cast<EObjType::EEnum>( child_type ) ) );
     return new_obj;
   }
 
 
-class file : public object
+class file : public object, public object_registry
 {
   H5File m_file;
   common_fg m_common_fg;
@@ -179,10 +196,12 @@ class file : public object
     if ( access & Access::create ) retval |= H5F_ACC_CREAT;
     return retval;
   }
+  typedef map<long,shared_obj_ptr> TRefMap;
+  TRefMap m_referenced_objects;
 public:
   file( const char* name, unsigned int flags )
     : m_file( name, to_hdf5_access( flags ) )
-    , m_common_fg( m_file, m_file, EObjType::file, name )
+    , m_common_fg( *this, m_file, m_file, EObjType::file, name )
   {
   }
   static bool is_hdf5_file( const char* name )
@@ -195,6 +214,40 @@ public:
   object* get_child( size_t idx ) { return m_common_fg.get_child( idx ); }
   size_t get_attribute_count() const { return m_common_fg.get_attribute_count(); }
   attribute* get_attribute( size_t idx ) { return m_common_fg.get_attribute (idx ); }
+  object_registry& registry() { return *this; }
+  int obj_id () { return m_file.getId(); }
+  object* dereference( int src_id, long file_offset )
+  {
+    TRefMap::iterator iter = m_referenced_objects.find( file_offset );
+    if ( iter != m_referenced_objects.end() )
+      return iter->second.get();
+
+    void* ref = &file_offset;
+    H5O_type_t obj_type = H5O_TYPE_UNKNOWN;
+    H5Rget_obj_type( src_id, H5R_OBJECT, ref, &obj_type );
+    object* retval = NULL;
+    string name_str;
+    hid_t obj_id = H5Rdereference( src_id, H5R_OBJECT, ref );
+    if ( obj_id ) {
+      size_t name_size = H5Iget_name( obj_id, NULL, 0 );
+      name_str.resize( name_size + 1 );
+      H5Iget_name( obj_id, (char*)name_str.c_str(), name_str.size() );
+      switch( obj_type ) {
+      case H5O_TYPE_GROUP:
+	retval = new group( *this, Group(obj_id), name_str );
+	break;
+      case H5O_TYPE_DATASET:
+	retval = new dataset_impl( *this, DataSet(obj_id), name_str );
+	break;
+      default:
+	retval = new rand_obj( *this, name_str, static_cast<EObjType::EEnum>( obj_type ) );
+	break;
+      }
+      shared_obj_ptr retval_ptr = shared_obj_ptr( retval );
+      m_referenced_objects.insert( make_pair( file_offset, retval_ptr ) );
+    }
+    return retval;
+  }
 };
 
 }}

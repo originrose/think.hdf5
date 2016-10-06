@@ -2,9 +2,11 @@
   (:require [resource.core :as resource]
             [clojure.set :as set])
   (:import [think.hdf5 hdf5$library hdf5$Access hdf5$object hdf5$EObjType
-            hdf5$dataset hdf5$attribute hdf5$abstract_ds]
+            hdf5$dataset hdf5$attribute hdf5$abstract_ds
+            hdf5$object_registry]
            [org.bytedeco.javacpp BytePointer FloatPointer ShortPointer
-            LongPointer IntPointer DoublePointer]))
+            LongPointer IntPointer DoublePointer Pointer]
+           [java.lang.reflect Field]))
 
 
 (defn byte-ptr->string
@@ -156,6 +158,18 @@
       (.get ptr retval)
       retval)))
 
+(defn- get-private-field [^Class cls field-name]
+  (let [^Field field (first (filter
+                             (fn [^Field x] (.. x getName (equals field-name)))
+                             (.getDeclaredFields cls)))]
+    (.setAccessible field true)
+    field))
+
+(defonce address-field (get-private-field Pointer "address"))
+(defonce position-field (get-private-field Pointer "position"))
+(defonce limit-field (get-private-field Pointer "limit"))
+(defonce capacity-field (get-private-field Pointer "capacity"))
+
 (defmethod ->clj :dataset
   [^hdf5$object obj]
   (let [ds (.to_dataset obj)
@@ -172,21 +186,32 @@
                              (.get_dims ds dim-ptr)
                              dim-ptr))))
         n-elems (reduce * dim-buffer)
+
         ^Pointer storage (cond
                            (= data-type :dt_float)
                            (let [dtype-size (quot mem-size n-elems)]
                              (if (= dtype-size 8)
                                (DoublePointer. n-elems)
                                (FloatPointer. n-elems)))
-                           (= data-type :dt_integer)
+                           (or (= data-type :dt_integer)
+                               (= data-type :dt_reference))
                            (let [dtype-size (quot mem-size n-elems)]
                              (condp = dtype-size
                                8 (LongPointer. n-elems)
                                4 (IntPointer. n-elems)
                                2 (ShortPointer. n-elems)
                                1 (BytePointer. n-elems))))
-        _ (.read ds storage mem-size)
-        ret-data (->array storage)]
+        ret-data (try
+                   (.read ds storage mem-size)
+                   (if (= data-type :dt_reference)
+                     (let [obj-reg (.registry obj)
+                           obj-id (.obj_id obj)]
+                       (mapv (fn [file-offset]
+                               (.dereference obj-reg obj-id (long file-offset)))
+                             (->array storage)))
+                     (->array storage))
+                   (catch Throwable e
+                     e))]
     {:type :dataset
      :name (byte-ptr->string (.name obj))
      :attributes (mapv attr->clj (get-attributes obj))
@@ -195,3 +220,8 @@
      :n-dims n-dims
      :dimensions (vec dim-buffer)
      :data ret-data}))
+
+
+(defn crash
+  []
+  (->clj (second (get-children (open-file "test_data/fashion_data.mat")))))
