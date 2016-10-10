@@ -1,5 +1,5 @@
 (ns think.hdf5.core
-  (:require [resource.core :as resource]
+  (:require [think.resource.core :as resource]
             [clojure.set :as set])
   (:import [think.hdf5 hdf5$library hdf5$Access hdf5$object hdf5$EObjType
             hdf5$dataset hdf5$attribute hdf5$abstract_ds

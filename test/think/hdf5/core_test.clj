@@ -1,7 +1,7 @@
 (ns think.hdf5.core-test
   (:require [clojure.test :refer :all]
             [think.hdf5.core :refer :all]
-            [resource.core :as resource]))
+            [think.resource.core :as resource]))
 
 
 (deftest basic-test
