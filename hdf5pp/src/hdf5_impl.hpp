@@ -23,7 +23,7 @@ namespace think { namespace hdf5 {
     virtual EObjType::EEnum type() const { return m_type; }
     virtual string name() const { return m_name; }
     virtual object_registry& registry() { return m_registry; }
-    int obj_id () { return 0; }
+    int obj_id () const { return 0; }
   };
 
   class attribute_impl : public attribute
@@ -116,7 +116,7 @@ namespace think { namespace hdf5 {
     }
     string name() const { return m_common_fg.name(); }
     EObjType::EEnum type() const { return EObjType::group; }
-    int obj_id () { return m_group.getId(); }
+    int obj_id () const { return m_group.getId(); }
     size_t child_count() const { return m_common_fg.child_count(); }
     object* get_child( size_t idx ) { return m_common_fg.get_child( idx ); }
     size_t get_attribute_count() const { return m_common_fg.get_attribute_count(); }
@@ -130,18 +130,20 @@ namespace think { namespace hdf5 {
     DataSet m_dataset;
     common_loc m_location;
     string m_name;
+    hid_t m_memtype; //for variable length strings
   public:
     dataset_impl(object_registry& reg, const DataSet& inDataset, const string& inName)
       : m_registry( reg )
       , m_dataset( inDataset )
       , m_location( m_dataset )
       , m_name( inName )
+      , m_memtype( 0 )
     {
     }
     string name() const { return m_name; }
     EObjType::EEnum type() const { return EObjType::dataset; }
     object_registry& registry() { return m_registry; }
-    int obj_id () { return m_dataset.getId(); }
+    int obj_id () const { return m_dataset.getId(); }
     size_t get_attribute_count() const { return m_location.get_attribute_count(); }
     attribute* get_attribute( size_t idx ) { return m_location.get_attribute(idx); }
     EDType get_type_class() const {
@@ -159,6 +161,57 @@ namespace think { namespace hdf5 {
 	m_dataset.read( buf, m_dataset.getDataType() );
     }
     dataset* to_dataset() { return this; }
+    bool is_variable_len_string() const
+    {
+      hid_t filetype = H5Dget_type(obj_id());
+      return H5Tis_variable_str(filetype) != 0;
+    }
+    size_t string_column_size() const
+    {
+      hid_t filetype = H5Dget_type(obj_id());
+      size_t sdim = H5Tget_size(filetype);
+      //make room for null terminator.
+      ++sdim;
+      return sdim;
+    }
+    size_t string_size() const
+    {
+      size_t sdim = string_column_size();
+      if (ndims()) {
+	hsize_t dims[10] = { 0 };
+	if ( ndims() > 10 ) { throw std::exception(); }
+	m_dataset.getSpace().getSimpleExtentDims( dims );
+	hsize_t total_dims = 1;
+	for ( size_t idx = 0; idx < ndims(); ++idx )
+	  total_dims *= dims[idx];
+	return static_cast<size_t>( sdim * total_dims );
+      }
+      else
+	return sdim;
+    }
+    void read_variable_string(void* buf, size_t buf_size )
+    {
+      m_memtype = H5Tcopy(H5T_C_S1);
+      H5Tset_size(m_memtype, H5T_VARIABLE);
+      H5Dread(obj_id(), m_memtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf);
+    }
+
+    void release_variable_string(void* buf)
+    {
+      if ( m_memtype ) {
+	H5Dvlen_reclaim( m_memtype, H5Dget_space( obj_id() ), H5P_DEFAULT, buf );
+	H5Tclose( m_memtype );
+	m_memtype = 0;
+      }
+    }
+
+    void read_string(void* buf)
+    {
+      hid_t memtype = H5Tcopy(H5T_C_S1);
+      H5Tset_size( memtype, string_column_size() );
+      H5Dread( obj_id(), memtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf );
+      H5Tclose( memtype );
+    }
   };
 
   shared_obj_ptr common_fg::create_child( size_t idx ) const
@@ -215,7 +268,7 @@ public:
   size_t get_attribute_count() const { return m_common_fg.get_attribute_count(); }
   attribute* get_attribute( size_t idx ) { return m_common_fg.get_attribute (idx ); }
   object_registry& registry() { return *this; }
-  int obj_id () { return m_file.getId(); }
+  int obj_id () const { return m_file.getId(); }
   object* dereference( int src_id, long file_offset )
   {
     TRefMap::iterator iter = m_referenced_objects.find( file_offset );

@@ -97,7 +97,7 @@ namespace think { namespace hdf5 {
     virtual object* get_child( size_t idx ) { return NULL; }
     virtual dataset* to_dataset() { return NULL; }
     virtual object_registry& registry() = 0;
-    virtual int obj_id () = 0;
+    virtual int obj_id () const = 0;
   };
 
   class dataset : public object, public abstract_ds
@@ -116,6 +116,13 @@ namespace think { namespace hdf5 {
     //dims are ndims * sizeof(hsize_t)
     virtual void get_dims( void* dims ) const = 0;
     virtual void read( void* buf, size_t buf_size) const = 0;
+    virtual bool is_variable_len_string() const = 0;
+    virtual size_t string_column_size() const = 0;
+    virtual size_t string_size() const = 0;
+    //Buf is an array of pointers max(1, n-dims)
+    virtual void read_variable_string(void* buf, size_t buf_size ) = 0;
+    virtual void release_variable_string( void* buf ) = 0;
+    virtual void read_string(void* buf) = 0;
   };
 
 }}

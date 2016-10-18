@@ -8,6 +8,35 @@
             LongPointer IntPointer DoublePointer Pointer]
            [java.lang.reflect Field]))
 
+(defn- get-private-field [^Class cls field-name]
+  (let [^Field field (first (filter
+                             (fn [^Field x] (.. x getName (equals field-name)))
+                             (.getDeclaredFields cls)))]
+    (.setAccessible field true)
+    field))
+
+(defonce address-field (get-private-field Pointer "address"))
+(defonce position-field (get-private-field Pointer "position"))
+(defonce limit-field (get-private-field Pointer "limit"))
+(defonce capacity-field (get-private-field Pointer "capacity"))
+
+(defn unsafe-read-byte
+  [^BytePointer byte-ary ^long idx]
+  (.set ^Field capacity-field byte-ary (inc idx))
+  (.set ^Field limit-field byte-ary (inc idx))
+  (let [retval (.get byte-ary idx)]
+    retval))
+
+
+(defn variable-byte-ptr->string
+  [^BytePointer byte-ary]
+  (String. ^"[B"
+           (into-array Byte/TYPE
+                       (take-while #(not= % 0)
+                                   (map #(unsafe-read-byte
+                                          byte-ary %)
+                                        (range))))))
+
 
 (defn byte-ptr->string
   [^BytePointer byte-ary]
@@ -158,17 +187,13 @@
       (.get ptr retval)
       retval)))
 
-(defn- get-private-field [^Class cls field-name]
-  (let [^Field field (first (filter
-                             (fn [^Field x] (.. x getName (equals field-name)))
-                             (.getDeclaredFields cls)))]
-    (.setAccessible field true)
-    field))
-
-(defonce address-field (get-private-field Pointer "address"))
-(defonce position-field (get-private-field Pointer "position"))
-(defonce limit-field (get-private-field Pointer "limit"))
-(defonce capacity-field (get-private-field Pointer "capacity"))
+(defn construct-byte-ptr
+  [addr len]
+  (let [retval (BytePointer.)]
+    (.set ^Field address-field retval addr)
+    (.set ^Field limit-field retval len)
+    (.set ^Field capacity-field retval len)
+    retval))
 
 (defmethod ->clj :dataset
   [^hdf5$object obj]
@@ -186,42 +211,71 @@
                              (.get_dims ds dim-ptr)
                              dim-ptr))))
         n-elems (reduce * dim-buffer)
+        retval     {:type :dataset
+                    :name (byte-ptr->string (.name obj))
+                    :attributes (mapv attr->clj (get-attributes obj))
+                    :data-type data-type
+                    :mem-size mem-size
+                    :n-dims n-dims
+                    :dimensions (vec dim-buffer)}]
+    (if (= data-type :dt_string)
+      (if (.is_variable_len_string ds)
+        (let [num-longs (quot mem-size Long/BYTES)
+              data-ptr (LongPointer. num-longs)
+              _ (.read_variable_string ds data-ptr mem-size)
+              data (mapv (fn [idx]
+                           (let [long-val (.get data-ptr idx)
+                                 ^BytePointer byte-ptr
+                                 (construct-byte-ptr long-val 0)]
+                             (variable-byte-ptr->string byte-ptr)
+                             ))
+                         (range num-longs))]
+          (.release_variable_string ds data-ptr)
+          (assoc retval
+                 :data data))
+        (let [str-column-size (.string_column_size ds)
+              str-size (.string_size ds)
+              data-buffer (BytePointer. str-size)
+              n-strings (quot str-size str-column-size)]
+          (.read_string ds data-buffer)
 
-        ^Pointer storage (cond
-                           (= data-type :dt_float)
-                           (let [dtype-size (quot mem-size n-elems)]
-                             (if (= dtype-size 8)
-                               (DoublePointer. n-elems)
-                               (FloatPointer. n-elems)))
-                           (or (= data-type :dt_integer)
-                               (= data-type :dt_reference))
-                           (let [dtype-size (quot mem-size n-elems)]
-                             (condp = dtype-size
-                               8 (LongPointer. n-elems)
-                               4 (IntPointer. n-elems)
-                               2 (ShortPointer. n-elems)
-                               1 (BytePointer. n-elems))))
-        ret-data (try
-                   (.read ds storage mem-size)
-                   (if (= data-type :dt_reference)
-                     (let [obj-reg (.registry obj)
-                           obj-id (.obj_id obj)]
-                       (mapv (fn [file-offset]
-                               (.dereference obj-reg obj-id (long file-offset)))
-                             (->array storage)))
-                     (->array storage))
-                   (catch Throwable e
-                     e))]
-    {:type :dataset
-     :name (byte-ptr->string (.name obj))
-     :attributes (mapv attr->clj (get-attributes obj))
-     :data-type data-type
-     :mem-size mem-size
-     :n-dims n-dims
-     :dimensions (vec dim-buffer)
-     :data ret-data}))
+          (assoc retval
+                 :data (mapv (fn [idx]
+                               (let [offset (* idx str-column-size)]
+                                 (variable-byte-ptr->string
+                                  (construct-byte-ptr (+ (.address data-buffer)
+                                                         offset) 0))))
+                             (range n-strings))
+                 :string-column-size str-column-size
+                 :str-size str-size)))
+      ;;Numeric or reference datatypes
+      (let [^Pointer storage (cond
+                               (= data-type :dt_float)
+                               (let [dtype-size (quot mem-size n-elems)]
+                                 (if (= dtype-size 8)
+                                   (DoublePointer. n-elems)
+                                   (FloatPointer. n-elems)))
+                               (or (= data-type :dt_integer)
+                                   (= data-type :dt_reference))
+                               (let [dtype-size (quot mem-size n-elems)]
+                                 (condp = dtype-size
+                                   8 (LongPointer. n-elems)
+                                   4 (IntPointer. n-elems)
+                                   2 (ShortPointer. n-elems)
+                                   1 (BytePointer. n-elems))))]
+        (assoc retval :data (try
+                              (.read ds storage mem-size)
+                              (if (= data-type :dt_reference)
+                                (let [obj-reg (.registry obj)
+                                      obj-id (.obj_id obj)]
+                                  (mapv (fn [file-offset]
+                                          (.dereference obj-reg obj-id (long file-offset)))
+                                        (->array storage)))
+                                (->array storage))
+                              (catch Throwable e
+                                e)))))))
 
 
 (defn crash
   []
-  (->clj (second (get-children (open-file "test_data/fashion_data.mat")))))
+  (->clj (first (get-children (open-file "test_data/strings.h5")))))
