@@ -1,18 +1,16 @@
 language: clojure
 sudo: required
 services:
-  - docker
+- docker
 env:
   global:
-  - secure: gyfxgtFicnpuMEN11N+UB/eSsiaBDh6U96St/iJdmTPLU2A06vbV1N0v0zvA1h1jorT3OQ/HHTLx3fvqT+00zoFyx1lv6IL/ddZwf/DArnPdx2cQ3+FNSdCZWRQeOzLcBWi6JMtcHbKzGJ7QjtW8Ea4sV42Vx1TBpJ1MCPtzbekeq0SVP+f9MnhrU5pRuLDax7CEW/ZN/eUfgW8x1dbr6vORQzj26kovGb7Ulp6nyQINVP4bAQQfA//30eMnGlYHJ11Ka3xOY3+LW0CxfBixCMSnLFu6E3dWfzFgsf952bg1Wj06vco6an3wiBs/SVnVlvfZKJLYIUMuLbKeVHFahUm6zEqxXrnenYMwcaLfqe+9HMOJXMjeBZRldrg3QXozUQYH8aeik9Op7KUu5JBPh1vnjOcvPBJz3mOltnod/3XeHpZANwFmZad7OoUZVlT4Noi1B9hIpmaLMMjjp8D7xYQnOv6GVngYOcsQIB6T7kW/91wrJiSsMTl9UPgg1LqNSACUcYiBS83XTpraJqTRRM3cTnjmn8/lmMSgm+DV5kFMdSzoalr7p59AYgVubmv7tKaPaecKD78ZPy0fnMWEDK920lqvPJMwGKz1orTm56Tm1rqQbeNubVU00jGE0qZdptasn9g0aj6jxbf+w57xShiVwR2UrPExShzw9au8OwQ=
-  - secure: n89Wee7z2rFDz17CYGv8XTQLvpZf9G86xL86ycnMWP9+DFdl4L9Dq1wgugcae/kFBu8vvmH312mjwkDkYPT7ihhRGi/gzZYXWc8AmWSKPu9EbG0uUcwVR1WCHkKmtV0YRoAZIdmbnsFLjLKyCz+N9jk669yA7mIN+96Ru+ydiIX+WwEarNvwNOgroqKlweueIhO/1Mr4tZyJ9hjphRujz3fLpmii4i1cxdzOudPntC330QZ9Ci4b5ootz2lrCcz1epfNFEpvW/DkyG3maQJzoba6Eb8no4zi8Z8r1INx8iJ5vDQJ1Etegb4SvBGdXPwgTLUMRkWQw/qCkFoRlEtWEbqxxfR8uP5u2eapiOf2YM+oiCrpNTjRPjWENSuVARcrYQMZLWl/1Es/YhKcSMAnzTq08VgXbT7cgmaaOA9mEZv9i3dR40KDl/jFIXiWTCwV0rq4lZ15k2muerMzz45EF7cp+aBc4QN6zeeoGIxQerNkmHxQGog0x0snBaH8q4c0WguvKs0JYHgBpfYrpcQgsmFyoiIc+L2sI5lGY6yWx45hfb4vftmPutW2XFRjBSGYrpykiQn/uFYUg7ZKDrJTH6HDwRjKJRusdIVGehX/MzIE2pQqYSuL9R/R5uYhqqKZOmqEN+dxA4wJzsgnwpZmhg5/ODvzxiAmypJ9zkpNmW8=
 jdk: oraclejdk8
 before_install:
+- openssl aes-256-cbc -K $encrypted_70b83c40b0ba_key -iv $encrypted_70b83c40b0ba_iv -in profiles.clj.enc -out profiles.clj -d
 - wget https://releases.hashicorp.com/vault/0.6.1/vault_0.6.1_linux_amd64.zip -O vault.zip
 - unzip vault.zip
 - export PATH=$PATH:$PWD
 - ". scripts/s3-deploy-access"
 - docker build -t hdf5-buildimg .
 
-script: ./test-deploy-docker.sh
-
+script: "./test-deploy-docker.sh"
