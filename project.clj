@@ -1,5 +1,5 @@
 (defproject thinktopic/hdf5 "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
+  :description "Small jni wrapper to read hdf5 files."
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -13,19 +13,4 @@
   :native-path "java/native/"
   :aot [think.hdf5.compile]
   :main think.hdf5.compile
-
-
-  :plugins [[s3-wagon-private "1.2.0"]]
-
-
-  :repositories  {"snapshots"  {:url "s3p://thinktopic.jars/snapshots/"
-                                :passphrase :env
-                                :username :env
-                                :releases false}
-                  "releases"  {:url "s3p://thinktopic.jars/releases/"
-                               :passphrase :env
-                               :username :env
-                               :snapshots false
-                               :sign-releases false}}
-
   )
