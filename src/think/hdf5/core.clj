@@ -275,7 +275,10 @@
                               (catch Throwable e
                                 e)))))))
 
-
-(defn crash
-  []
-  (->clj (first (get-children (open-file "test_data/strings.h5")))))
+(defn child-map
+  "Given a node return a map of keyword-name to child-node"
+  [node]
+  (into {} (map (fn [node-child]
+                  [(keyword (get-name node-child))
+                   node-child])
+                (get-children node))))
