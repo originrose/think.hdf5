@@ -1,4 +1,4 @@
-(defproject thinktopic/hdf5 "0.1.3"
+(defproject thinktopic/hdf5 "0.1.4-SNAPSHOT"
   :description "Small jni wrapper to read hdf5 files."
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
