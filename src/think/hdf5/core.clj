@@ -2,7 +2,7 @@
   (:require [think.resource.core :as resource]
             [clojure.set :as set])
   (:import [think.hdf5 api$hdf5$Access api$hdf5 api$hdf5$FileObjType
-            api$hdf5$ObjType]
+            api$hdf5$ObjType api$hdf5$TypeClass]
            [org.bytedeco.javacpp BytePointer FloatPointer ShortPointer
             LongPointer IntPointer DoublePointer Pointer CLongPointer]
            [java.lang.reflect Field]))
@@ -130,11 +130,7 @@
   (-> (api$hdf5/H5Iget_type obj-id)
       objtype->kw))
 
-(comment
-  (def thefile (open-file "test_data/strings.h5"))
-  (def theobj (first (get-file-objects thefile)))
-  (def thetype (get-obj-type theobj))
-  )
+
 
 (defn get-obj-name
   [^long obj-id]
@@ -143,6 +139,65 @@
     (api$hdf5/H5Iget_name obj-id retval (+ name-len 1))
     (byte-ptr->string retval)))
 
+(defn get-num-children
+  [^long obj-id]
+  (api$hdf5/get_num_children obj-id))
+
+
+(defn open-child
+  ^long [^long obj-id ^long idx]
+  (api$hdf5/open_child obj-id idx))
+
+(defn get-num-attrs
+  ^long [^long obj-id]
+  (api$hdf5/get_num_attrs obj-id))
+
+(defn get-attribute-in-mem-size
+  ^long [^long attr-id]
+  (api$hdf5/get_attribute_in_mem_data_size attr-id))
+
+(defn get-dataset-in-mem-size
+  ^long [^long obj-ds-id]
+  (api$hdf5/get_dataset_in_mem_data_size obj-ds-id))
+
+(defn get-dataset-datatype
+  ^long [^long obj-ds-id]
+  (api$hdf5/get_dataset_data_type obj-ds-id))
+
+
+(def typeclass-kwd-map
+  {api$hdf5$TypeClass/H5T_NO_CLASS :H5T_NO_CLASS
+   api$hdf5$TypeClass/H5T_INTEGER :H5T_INTEGER
+   api$hdf5$TypeClass/H5T_FLOAT :H5T_FLOAT
+   api$hdf5$TypeClass/H5T_TIME :H5T_TIME
+   api$hdf5$TypeClass/H5T_STRING :H5T_STRING
+   api$hdf5$TypeClass/H5T_BITFIELD :H5T_BITFIELD
+   api$hdf5$TypeClass/H5T_OPAQUE :H5T_OPAQUE
+   api$hdf5$TypeClass/H5T_COMPOUND :H5T_COMPOUND
+   api$hdf5$TypeClass/H5T_REFERENCE :H5T_REFERENCE
+   api$hdf5$TypeClass/H5T_ENUM :H5T_ENUM
+   api$hdf5$TypeClass/H5T_VLEN :H5T_VLEN
+   api$hdf5$TypeClass/H5T_ARRAY :H5T_ARRAY
+   api$hdf5$TypeClass/H5T_NCLASSES :H5T_NCLASSES})
+
+
+(def kwd-typeclass-map (set/map-invert typeclass-kwd-map))
+
+;; static TypeClass::EEnum get_datatype_class(hid_t type_id);
+;;     static ssize_t get_datatype_size( hid_t type_id );
+;;     static ssize_t is_variable_len_string( hid_t type_id );
+;;     static hid_t create_str_type();
+;;     static hid_t create_variable_str_type();
+;;     static herr_t close_type( hid_t type_id );
+
+
+(comment
+  (def thefile (open-file "test_data/strings.h5"))
+  (def theobj (first (get-file-objects thefile)))
+  (def thetype (get-obj-type theobj))
+  (def first-child (open-child theobj 0))
+
+  )
 
 ;; (defn build-lookup
 ;;   [lookup-table-pairs]

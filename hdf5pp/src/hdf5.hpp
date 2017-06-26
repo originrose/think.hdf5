@@ -10,6 +10,9 @@ namespace think {
     typedef int htri_t;
     typedef long hid_t;
     typedef size_t ssize_t;
+    typedef long long unsigned hsize_t;
+    typedef bool hbool_t;
+
 
     struct Access {
       enum EEnum {
@@ -71,7 +74,7 @@ namespace think {
       };
     };
 
-    struct GroupStoragetType {
+    struct GroupStorageType {
       enum EEnum {
 	H5G_STORAGE_TYPE_UNKNOWN = -1,	/* Unknown link storage type	*/
 	H5G_STORAGE_TYPE_SYMBOL_TABLE,      /* Links in group are stored with a "symbol table" */
@@ -82,10 +85,30 @@ namespace think {
     };
 
     struct H5GInfo {
-      GroupStorageType 	storage_type;	        /* Type of storage for links in group */
-      hsize_t 	        nlinks;		        /* Number of links in group */
-      int64_t           max_corder;             /* Current max. creation order value for group */
-      hbool_t           mounted;                /* Whether group has a file mounted on it */
+      GroupStorageType::EEnum 	storage_type;	        /* Type of storage for links in group */
+      size_t 	                nlinks;		        /* Number of links in group */
+      long long                 max_corder;             /* Current max. creation order value for group */
+      int                       mounted;                /* Whether group has a file mounted on it */
+    };
+
+    struct TypeClass
+    {
+      enum EEnum {
+	H5T_NO_CLASS         = -1,  /*error                                      */
+	H5T_INTEGER          = 0,   /*integer types                              */
+	H5T_FLOAT            = 1,   /*floating-point types                       */
+	H5T_TIME             = 2,   /*date and time types                        */
+	H5T_STRING           = 3,   /*character string types                     */
+	H5T_BITFIELD         = 4,   /*bit field types                            */
+	H5T_OPAQUE           = 5,   /*opaque types                               */
+	H5T_COMPOUND         = 6,   /*compound types                             */
+	H5T_REFERENCE        = 7,   /*reference types                            */
+	H5T_ENUM		 = 8,	/*enumeration types                          */
+	H5T_VLEN		 = 9,	/*Variable-Length types                      */
+	H5T_ARRAY	         = 10,	/*Array types                                */
+
+	H5T_NCLASSES                /*this must be last                          */
+      };
     };
 
     static herr_t H5open(void);
@@ -97,12 +120,41 @@ namespace think {
     static ssize_t H5Fget_obj_count(hid_t file_id, FileObjType::EEnum types);
     static ssize_t H5Fget_obj_ids(hid_t file_id, FileObjType::EEnum types, size_t max_objs, hid_t *obj_id_list);
     static herr_t H5Fclose(hid_t file_id);
-    
+
     static ObjType::EEnum H5Iget_type(hid_t id);
-    static hid_t H5Iget_file_id(hid_t id);
     static ssize_t H5Iget_name(hid_t id, char *name/*out*/, size_t size);
 
-    static herr_t H5Gget_info(hid_t loc_id, H5GInfo *ginfo);
+    static ssize_t get_num_children(hid_t loc_id);
+    //Some abstraction here to avoid lots of spurious arguments.
+    static hid_t open_child(hid_t loc_id, hsize_t idx);
+
+    static ssize_t get_num_attrs(hid_t loc_id);
+    static hid_t open_attribute(hid_t loc_id, hsize_t idx);
+    static ssize_t get_attribute_name(hid_t attr, size_t buf_size, char* /*out*/ name);
+
+    static ssize_t get_attribute_in_mem_data_size( hid_t attr_id );
+    static ssize_t get_dataset_in_mem_data_size( hid_t ds_id );
+
+    static hid_t get_attribute_data_type(hid_t attr_id );
+    static hid_t get_dataset_data_type(hid_t ds_id );
+
+    static TypeClass::EEnum get_datatype_class(hid_t type_id);
+    static ssize_t get_datatype_size( hid_t type_id );
+    static ssize_t is_variable_len_string( hid_t type_id );
+    static hid_t create_str_type();
+    static hid_t create_variable_str_type();
+    static herr_t close_type( hid_t type_id );
+
+    static hid_t get_attribute_dataspace(hid_t attr_id);
+    static hid_t get_dataset_dataspace(hid_t ds_id);
+    static int get_dataspace_ndims(hid_t dataspace_id );
+    static int get_dataspace_dims(hid_t dataspace_id, hsize_t *dims, hsize_t *maxdims);
+    static herr_t close_space( hid_t dataspace_id );
+
+    static herr_t read_attr_data(hid_t attr_id, hid_t datatype_id, void* buf);
+    static herr_t read_dataset_data( hid_t ds_id, hid_t datatype_id, void* buf);
+    static herr_t vlen_reclaim(hid_t datatype, hid_t dataspace, void* buffer);
+
   };
 
 }
