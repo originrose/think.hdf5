@@ -5,12 +5,12 @@
 
 (defn build-java-stub
   []
-  (Builder/main (into-array String ["think.hdf5.presets.hdf5" "-d" "java"])))
+  (Builder/main (into-array String ["think.hdf5.presets.api" "-d" "java"])))
 
 
 (defn build-jni-lib
   []
-  (Builder/main (into-array String ["think.hdf5.hdf5" "-d"
+  (Builder/main (into-array String ["think.hdf5.api" "-d"
                                     (str (System/getProperty "user.dir")
                                          "/java/native/linux/x86_64")
                                     "-nodelete" ;;When shit doesn't work this is very helpful
