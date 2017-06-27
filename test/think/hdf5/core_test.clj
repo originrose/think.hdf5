@@ -7,8 +7,10 @@
 (deftest basic-test
   (resource/with-resource-context
     (let [test-file (hdf5/open-file "test_data/h5ex_g_create.h5")
-          test-data (mapv hdf5/->clj (hdf5/get-children test-file))]
-      (is (= test-data [{:attributes [] :children [] :name "/G1" :type :group}])))))
+          test-data (mapv hdf5/->clj (hdf5/get-children test-file))
+          child-map (hdf5/child-map test-file)]
+      (is (= test-data [{:attributes [] :children [] :name "/G1" :type :group}]))
+      (is (= (first (keys child-map)) :G1)))))
 
 
 (deftest reference-test

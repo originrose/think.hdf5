@@ -121,11 +121,14 @@ namespace think {
     static ssize_t H5Fget_obj_ids(hid_t file_id, FileObjType::EEnum types, size_t max_objs, hid_t *obj_id_list);
 
     static ObjType::EEnum get_object_type(hid_t id);
+    //Get the absolute name of an object
     static ssize_t get_name(hid_t id, char *name/*out*/, size_t size);
     //Close anything; file, object, group, dataspace, etc.
     static herr_t close_object( hid_t obj );
 
     static ssize_t get_num_children(hid_t loc_id);
+    //Get the relative name of a child with respect to this object
+    static ssize_t get_child_name( hid_t loc_id, ssize_t idx, char* name /*out*/, size_t size);
     //Some abstraction here to avoid lots of spurious arguments.
     static hid_t open_child(hid_t loc_id, hsize_t idx);
 

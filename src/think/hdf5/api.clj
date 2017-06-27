@@ -278,6 +278,21 @@
       (mapv (partial open-child obj)
             (range (get-num-children obj))))))
 
+(defn get-child-name
+  ^String [^long loc-id ^long idx]
+  (let [name-len (+ (api$hdf5/get_child_name loc-id idx (BytePointer.) 0) 1)
+        retval (BytePointer. name-len)]
+    (api$hdf5/get_child_name loc-id idx retval name-len)
+    (byte-ptr->string retval)))
+
+(defn get-children-names
+  [^long obj]
+  (let [obj-type (get-obj-type obj)]
+    (when (or (= obj-type :H5I_FILE)
+              (= obj-type :H5I_GROUP))
+      (mapv (partial get-child-name obj)
+            (range (get-num-children obj))))))
+
 (defn get-name
   ^String [^long obj]
   (get-obj-name obj))
@@ -289,10 +304,12 @@
 (defn child-map
   "Given a node return a map of keyword-name to child-node"
   [node]
-  (into {} (map (fn [node-child]
-                  [(keyword (get-name node-child))
-                   node-child])
-                (get-children node))))
+  (->> (map (fn [node-child child-name]
+              [(keyword child-name)
+               node-child])
+            (get-children node)
+            (get-children-names node))
+       (into {})))
 
 (defn get-attributes
   [^long obj]

@@ -81,6 +81,13 @@ namespace think {
     }
     return 0;
   }
+  hdf5::ssize_t hdf5::get_child_name( hid_t loc_id, ssize_t idx, char* name /*out*/, size_t size)
+  {
+    ssize_t name_len = H5Lget_name_by_idx(loc_id, ".", H5_INDEX_NAME, H5_ITER_INC, idx, name, size, H5P_DEFAULT);
+    if(name_len < 0)
+      std::runtime_error("H5Lget_name_by_idx failed");
+    return name_len;
+  }
   hdf5::hid_t hdf5::open_child(hid_t loc_id, hsize_t idx)
   {
     using namespace std;
