@@ -119,10 +119,11 @@ namespace think {
     static hid_t H5Fopen(const char *filename, unsigned flags );
     static ssize_t H5Fget_obj_count(hid_t file_id, FileObjType::EEnum types);
     static ssize_t H5Fget_obj_ids(hid_t file_id, FileObjType::EEnum types, size_t max_objs, hid_t *obj_id_list);
-    static herr_t H5Fclose(hid_t file_id);
 
-    static ObjType::EEnum H5Iget_type(hid_t id);
-    static ssize_t H5Iget_name(hid_t id, char *name/*out*/, size_t size);
+    static ObjType::EEnum get_object_type(hid_t id);
+    static ssize_t get_name(hid_t id, char *name/*out*/, size_t size);
+    //Close anything; file, object, group, dataspace, etc.
+    static herr_t close_object( hid_t obj );
 
     static ssize_t get_num_children(hid_t loc_id);
     //Some abstraction here to avoid lots of spurious arguments.
@@ -130,31 +131,25 @@ namespace think {
 
     static ssize_t get_num_attrs(hid_t loc_id);
     static hid_t open_attribute(hid_t loc_id, hsize_t idx);
-    static ssize_t get_attribute_name(hid_t attr, size_t buf_size, char* /*out*/ name);
 
-    static ssize_t get_attribute_in_mem_data_size( hid_t attr_id );
-    static ssize_t get_dataset_in_mem_data_size( hid_t ds_id );
-
-    static hid_t get_attribute_data_type(hid_t attr_id );
-    static hid_t get_dataset_data_type(hid_t ds_id );
-
+    static hid_t open_datatype(hid_t attr_or_dataset_id );
     static TypeClass::EEnum get_datatype_class(hid_t type_id);
+    static herr_t open_native_datatype( hid_t type_id );
     static ssize_t get_datatype_size( hid_t type_id );
     static ssize_t is_variable_len_string( hid_t type_id );
+    static ssize_t get_datatype_native_size( hid_t type_id );
     static hid_t create_str_type();
     static hid_t create_variable_str_type();
-    static herr_t close_type( hid_t type_id );
+    static herr_t set_datatype_size( hid_t dtype, size_t size );
 
-    static hid_t get_attribute_dataspace(hid_t attr_id);
-    static hid_t get_dataset_dataspace(hid_t ds_id);
+    static hid_t open_dataspace(hid_t attr_or_dataset_id);
+    static ssize_t get_dataspace_num_elements( hid_t ds_id );
     static int get_dataspace_ndims(hid_t dataspace_id );
     static int get_dataspace_dims(hid_t dataspace_id, hsize_t *dims, hsize_t *maxdims);
-    static herr_t close_space( hid_t dataspace_id );
 
-    static herr_t read_attr_data(hid_t attr_id, hid_t datatype_id, void* buf);
-    static herr_t read_dataset_data( hid_t ds_id, hid_t datatype_id, void* buf);
-    static herr_t vlen_reclaim(hid_t datatype, hid_t dataspace, void* buffer);
+    static herr_t read_data(hid_t attr_or_dataset_id, hid_t datatype_id, void* buf);
 
+    static hid_t dereference(hid_t src_obj, ssize_t file_offset);
   };
 
 }

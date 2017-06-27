@@ -40,14 +40,35 @@ namespace think {
   hdf5::ssize_t hdf5::H5Fget_obj_ids(hid_t file_id, FileObjType::EEnum types, size_t max_objs, hid_t *obj_id_list) {
     return ::H5Fget_obj_ids(file_id, types, max_objs, obj_id_list);
   }
-  hdf5::herr_t hdf5::H5Fclose(hid_t file_id) {
-    return ::H5Fclose( file_id );
-  }
-  hdf5::ObjType::EEnum hdf5::H5Iget_type(hid_t id) {
+  hdf5::ObjType::EEnum hdf5::get_object_type(hid_t id) {
     return static_cast<hdf5::ObjType::EEnum>( ::H5Iget_type(id) );
   }
-  hdf5::ssize_t hdf5::H5Iget_name(hid_t id, char *name/*out*/, size_t size) {
-    return ::H5Iget_name(id, name, size);
+  hdf5::ssize_t hdf5::get_name(hid_t id, char *name/*out*/, size_t size) {
+    if ( get_object_type( id ) == hdf5::ObjType::H5I_ATTR )
+      return ::H5Aget_name(id, size, name);
+    else
+      return ::H5Iget_name(id, name, size);
+  }
+  hdf5::herr_t hdf5::close_object( hid_t obj )
+  {
+    switch( H5Iget_type( obj ) ) {
+    case H5I_GROUP:
+      return H5Gclose( obj );
+    case H5I_DATASET:
+      return H5Dclose( obj );
+    case H5I_FILE:
+      return H5Fclose( obj );
+    case H5I_ATTR:
+      return H5Aclose( obj );
+    case H5I_DATASPACE:
+      return H5Sclose( obj );
+    case H5I_DATATYPE:
+      return H5Tclose( obj );
+    case H5I_REFERENCE:
+      return 0;
+    default:
+      return -1;
+    }
   }
   hdf5::ssize_t hdf5::get_num_children(hid_t loc_id) {
     ::H5G_info_t src_info;
@@ -126,89 +147,32 @@ namespace think {
 			  H5_ITER_INC, static_cast<hsize_t>(idx)
 			  , H5P_DEFAULT, H5P_DEFAULT);
   }
-  hdf5::ssize_t hdf5::get_attribute_name(hid_t attr, size_t buf_size, char* /*out*/ name)
+  hdf5::hid_t hdf5::open_datatype(hid_t obj_id )
   {
-    return H5Aget_name(attr, buf_size, name);
+    switch( get_object_type(obj_id) ) {
+    case ObjType::H5I_ATTR:
+      return H5Aget_type( obj_id );
+    case ObjType::H5I_DATASET:
+      return H5Dget_type( obj_id );
+    default:
+      throw std::runtime_error( "type does not have a datatype" );
+    };
   }
-
-  //!!closes the type!!
-  inline hdf5::ssize_t get_datatype_native_size(hdf5::hid_t mem_type_id)
-  {
-    using namespace std;
-    // Get the data type's size by first getting its native type then getting
-    // the native type's size.
-    hid_t native_type = H5Tget_native_type(mem_type_id, H5T_DIR_DEFAULT);
-    if (native_type < 0)
-        throw runtime_error("H5Tget_native_type failed");
-
-    size_t type_size = H5Tget_size(native_type);
-    if (type_size == 0)
-        throw runtime_error("H5Tget_size failed");
-
-    // Close the native type and the datatype of this attribute.
-    if (H5Tclose(native_type) < 0)
-        throw runtime_error("H5Tclose(native_type) failed");
-
-    if (H5Tclose(mem_type_id) < 0)
-        throw runtime_error( "H5Tclose(mem_type_id) failed");
-    return type_size;
-  }
-
   //!!closes the space!!
-  inline hdf5::ssize_t get_dataspace_extent_npoints(hdf5::hid_t dataspace_id)
+  inline hdf5::ssize_t hdf5::get_dataspace_num_elements(hdf5::hid_t dataspace_id)
   {
     using namespace std;
     ssize_t num_elements = H5Sget_simple_extent_npoints(dataspace_id);
     if (num_elements < 0)
         throw runtime_error("H5Sget_simple_extent_npoints failed");
-    // Close the dataspace
-    if (H5Sclose(dataspace_id) < 0)
-        throw runtime_error("H5Sclose failed");
     return num_elements;
   }
 
-  //closes the type and space!!
-  inline hdf5::ssize_t get_in_mem_data_size( hdf5::hid_t type_id, hdf5::hid_t dataspace )
+  hdf5::herr_t hdf5::open_native_datatype( hid_t type_id )
   {
-    return get_datatype_native_size(type_id) * get_dataspace_extent_npoints(dataspace);
+    return H5Tget_native_type(type_id, H5T_DIR_DEFAULT);
   }
 
-  hdf5::ssize_t hdf5::get_attribute_in_mem_data_size( hid_t attr_id )
-  {
-    using namespace std;
-    // Get the data type of this attribute
-    hid_t mem_type_id = H5Aget_type(attr_id);
-    if (mem_type_id < 0)
-        throw runtime_error("H5Aget_type failed");
-    hid_t space_id = H5Aget_space(attr_id);
-    if (space_id < 0)
-        throw runtime_error("H5Aget_space failed");
-    return get_in_mem_data_size( mem_type_id, space_id );
-  }
-
-  hdf5::ssize_t hdf5::get_dataset_in_mem_data_size( hid_t ds_id )
-  {
-    using namespace std;
-    // Get the data type of this dataset
-    hid_t mem_type_id = H5Dget_type(ds_id);
-    if (mem_type_id < 0)
-        throw runtime_error("H5Dget_type failed");
-
-    hid_t space_id = H5Dget_space(ds_id);
-    if (space_id < 0)
-        throw runtime_error("H5Dget_space failed");
-
-    return get_in_mem_data_size( mem_type_id, space_id );
-  }
-
-  hdf5::hid_t hdf5::get_attribute_data_type(hid_t attr_id )
-  {
-    return H5Aget_type(attr_id);
-  }
-  hdf5::hid_t hdf5::get_dataset_data_type(hid_t ds_id )
-  {
-    return H5Dget_type(ds_id);
-  }
   hdf5::TypeClass::EEnum hdf5::get_datatype_class( hid_t data_type_id )
   {
     return static_cast<hdf5::TypeClass::EEnum>( H5Tget_class(data_type_id) );
@@ -221,6 +185,26 @@ namespace think {
   {
     return H5Tis_variable_str( type_id );
   }
+  hdf5::ssize_t hdf5::get_datatype_native_size( hid_t type_id )
+  {
+    using namespace std;
+    // Get the data type's size by first getting its native type then getting
+    // the native type's size.
+    hid_t native_type = H5Tget_native_type(type_id, H5T_DIR_DEFAULT);
+    if (native_type < 0)
+        throw runtime_error("H5Tget_native_type failed");
+
+    size_t type_size = H5Tget_size(native_type);
+    if (type_size == 0)
+        throw runtime_error("H5Tget_size failed");
+
+    // Close the native type and the datatype of this attribute.
+    if (H5Tclose(native_type) < 0)
+        throw runtime_error("H5Tclose(native_type) failed");
+
+    return type_size;
+  }
+
   hdf5::hid_t hdf5::create_str_type()
   {
     return H5Tcopy( H5T_C_S1 );
@@ -231,13 +215,20 @@ namespace think {
     H5Tset_size( retval, H5T_VARIABLE );
     return retval;
   }
-  hdf5::herr_t hdf5::close_type( hid_t data_type_id )
+  hdf5::herr_t hdf5::set_datatype_size( hid_t dtype, size_t size )
   {
-    return H5Tclose( data_type_id );
+    return H5Tset_size(dtype, size);
   }
-  hdf5::hid_t hdf5::get_dataset_dataspace( hid_t ds_id )
+  hdf5::hid_t hdf5::open_dataspace( hid_t obj_id )
   {
-    return H5Dget_space( ds_id );
+    switch( get_object_type(obj_id) ) {
+    case ObjType::H5I_ATTR:
+      return H5Aget_space( obj_id );
+    case ObjType::H5I_DATASET:
+      return H5Dget_space( obj_id );
+    default:
+      throw std::runtime_error( "type does not have a dataspace" );
+    };
   }
   int hdf5::get_dataspace_ndims(hid_t dataspace_id )
   {
@@ -247,18 +238,21 @@ namespace think {
   {
     return H5Sget_simple_extent_dims(dataspace_id, dims, maxdims);
   }
-
-  hdf5::herr_t hdf5::read_attr_data(hid_t attr_id, hid_t datatype_id, void* buf)
+  hdf5::herr_t hdf5::read_data(hid_t obj_id, hid_t datatype_id, void* buf)
   {
-    return H5Aread(attr_id, datatype_id, buf);
+    switch( get_object_type(obj_id) ) {
+    case ObjType::H5I_ATTR:
+      return H5Aread(obj_id, datatype_id, buf);
+    case ObjType::H5I_DATASET:
+      return H5Dread( obj_id, datatype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf );
+    default:
+      throw std::runtime_error( "type does not have data" );
+    };
   }
-  hdf5::herr_t hdf5::read_dataset_data( hid_t ds_id, hid_t datatype_id, void* buf)
+  hdf5::hid_t hdf5::dereference(hid_t src_obj, ssize_t file_offset)
   {
-    return H5Dread( ds_id, datatype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf );
-  }
-  hdf5::herr_t hdf5::vlen_reclaim(hid_t datatype, hid_t dataspace, void* buf)
-  {
-    return H5Dvlen_reclaim( datatype, dataspace, H5P_DEFAULT, buf );
+    void* ref_ptr( &file_offset );
+    return H5Rdereference( src_obj, H5R_OBJECT, ref_ptr );
   }
 }
 
